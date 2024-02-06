@@ -1,223 +1,200 @@
+import numpy as np
 from typing import *
 from dataclasses import dataclass
 import unittest
-import math
+import string
 
-calpoly_email_addresses = ["chartl03@calpoly.edu"]
+calpoly_email_address = "chartl03@calpoly.edu"
 
-"""
-    Signature: area(self) -> float
-
-    Header: result = GlobeRect(30, 31, 24, 25).area()
-            self.assertEqual(result, 12309) -> True
-
-            result = GlobeRect(26, 27.4, -101, 101.5).area()
-            self.assertEqual(result, 100) -> False
-
-            result = GlobeRect("hello", 4, 0.2, 1).area() -> "Error"
-
-    Purpose: calculate an area in km given two latitude points and two longitude points
-
-"""
+def make_hash(size):
+    hash_table = [None] * size
+    return hash_table
 
 
-@dataclass(frozen=True)
-class GlobeRect:
-    llat: float
-    ulat: float
-    wlong: float
-    elong: float
-
-    def area(self):
-        lat_diff = self.ulat - self.llat
-        height_km = lat_diff * 110.574
-        long_diff = self.elong - self.wlong
-        length_km = long_diff * (111.320 * math.cos(lat_diff))
-        area = height_km * length_km
-        return area
+def h(string, hash_table):
+    n = min(len(string), 8)
+    total = 0
+    for item in range(len(string) - 1):
+        total = (total + (ord(string[item]) * (31 ** (n - 1 - item)))) % len(hash_table)
+    return int(total)
 
 
-@dataclass(frozen=True)
-class Region:
-    globerect: GlobeRect
-    name: str
-    terrain: str
+def put(item, hash_table):
+    index = int(h(item, hash_table))
+    if hash_table[index] is None:
+        hash_table[index] = item
+    else:
+        step = 1
+        next_index = (index + step) % len(hash_table)
+        while next_index != index and hash_table[int(next_index)] is not None:
+            step += 1
+            next_index = (index + (step * (step + 1)) / 2) % len(hash_table)
+
+        if next_index == index:
+            print("Hash table is full, unable to insert:", item)
+        else:
+            hash_table[int(next_index)] = item
+    load = hash_table.count(None)
+    print(load)
+    if (load * 2) <= len(hash_table):
+        extension = [None] * len(hash_table)
+        hash_table.extend(extension)
 
 
-def region_desc(self):
-    print(self.name and self.terrain)
+def contains(item, hash_table):
+    index = int(h(item, hash_table))
+    start_index = index
+    step = 1
+    while hash_table[index] is not None:
+        if hash_table[index] == item:
+            return True
+        step += 1
+        index = int((index + (step * (step + 1)) / 2) % len(hash_table))
+        if index == start_index:
+            break
+    return False
 
 
-@dataclass(frozen=True)
-class RegionCondition:
-    region: Region
-    year: int
-    population: int
-    c02emissions: int
+def file_hash(filename, hash_table):
+    with open(filename, "r") as f:
+        check_list = []
+        for line in f:
+            line = line.strip()
+            line = line.split()
+            for word in line:
+                if word not in check_list:
+                    put(word, hash_table)
+                    check_list.append(word)
+                    print(check_list)
+    return hash_table
 
 
-def region_cond(self):
-    print(self.region and self.year and self.pop and self.emissions)
+def hash_lists(hash_table):
+    htable_lists = []
+    for item in hash_table:
+        list_item = [item]
+        htable_lists.append(list_item)
+    return htable_lists
 
 
-def emissions_per_capita(self):
-    per_cap = self.emissions / self.pop
-    return per_cap
+def word_concordance(hash_table, filename):
+    with open(filename, 'r') as f:
+        for line_num, line in enumerate(f, start=1):
+            for item in hash_table:
+                if item[0] is not None:
+                    if item[0] in line:
+                        item.append(line_num)
+    return hash_table
 
 
-def emissions_per_square_km(self):
-    emissions = self.emissions / self.region.globerect.area()
-    return emissions
+
+def clean_hash(hash_table):
+    for item in hash_table:
+        if item[0] is not None:
+            clean_item = item[0].translate(str.maketrans("", "", string.punctuation)).lower()
+            item[0] = clean_item
+        else:
+            item[0] = item[0]
+    return hash_table
 
 
-example_region_conditions = [
-    RegionCondition(Region(GlobeRect(55.4, 55.8, 36.3, 36.8), "Moscow", "other"), 2022, 12700000, 230000000),
-    RegionCondition(Region(GlobeRect(41.4, 41.6, 272.7, 273), "Chicago", "other"), 2020, 2740000, 39300000),
-    RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000),
-    RegionCondition(Region(GlobeRect(34.4, 35.5, 239.3, 239.6), "Cal Poly", "mountain"), 2017, 20907, 47114)
-]
+def stop_concordance(stop_file, hash_table):
+    stop_hash = make_hash(128)
+    stop_hash = file_hash(stop_file, stop_hash)
+    stop_hash = hash_lists(stop_hash)
 
-"""
-    Signature: densest(region_conditions) -> string
+    for item in hash_table:
+        # Check if the item is not None before attempting to compare
+        if item is not None:
+            for word in stop_hash:
+                if word is not None:
+                    if item[0] == word[0]:
+                        hash_table.remove(item)
+                        break  # Exit inner loop after removing the item
 
-    Header: result = densest([RegionCondition(Region(GlobeRect(55.4, 55.8, 36.3, 36.8), "Moscow", "other"), 2022, 12700000, 230000000),
-    RegionCondition(Region(GlobeRect(41.4, 41.6, 272.7, 273), "Chicago", "other"), 2020, 2740000, 39300000)])
-            self.assertEqual(result, Moscow) -> True
-
-            result = densest([RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000),
-    RegionCondition(Region(GlobeRect(34.4, 35.5, 239.3, 239.6), "Cal Poly", "mountain"), 2017, 20907, 47114)])
-            self.assertEqual(result, Cal Poly) -> False
-
-            result = densest(0, 20, "mini") -> "Error"
-
-    Purpose: Find the densest region of a list of RegionCondition objects
-
-"""
-
-"""
-Line    i    density    densest_value    densest_region    return
-60      -	    -	          -	               -	         -
-61	    0	   None						
-63	    0				
-64		      5600								
-66			                 5600		
-67				                              Moscow	
-63	    1				
-64		      3785																	
-63	    2				
-64		      3510																		
-63	    3				
-64		       11																		
-68					                                        Moscow
+    return hash_table
 
 
-"""
+
+def write_new_file(hash_table, write_file):
+    for item in hash_table:
+        with open(write_file, 'a') as a:
+            if item[0] is not None:
+                lines = "".join(str(item[1:]))
+                a.write(item[0] + ': ' + lines + '\n')
 
 
-def densest(region_conditions):
-    densest_value = 0
-    densest_region = "string"
-    for i in region_conditions:
-        density = i.pop / i.region.globerect.area()
-        if density > densest_value:
-            densest_value = density
-            densest_region = i.region.name
-    return densest_region
+def concordance(stop_file, read_file, write_file):
+    read_hash = make_hash(128)
+    read_hash = file_hash(read_file, read_hash)
+    read_hash = hash_lists(read_hash)
+    read_hash = stop_concordance(stop_file, read_hash)
+    read_hash = word_concordance(read_hash, read_file)
+    read_hash = clean_hash(read_hash)
+    write_new_file(read_hash, write_file)
 
 
-"""
-    Signature: project_condition(region_condition, years) -> RegionCondition
 
-    Header: result = project_condition(RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000), 3)
-            self.assertEqual(result, RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10704280, 22800000)) -> True
-
-            result = project_condition(RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000), 6)
-            self.assertEqual(result, RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 11720000, 22800000)) -> False
-
-            result = project_condition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000), -5) -> "Error"
-
-    Purpose: Calculate the projected population of a region over an inputted number of years
-
-"""
+# Make a fresh hash table with the given size, containing no elements
+def test_hash(size: int):
+    hash_table = [None] * size
+    return hash_table
 
 
-def project_condition(region_condition, years):
-    final_pop = 0
-    if region_condition.region.terrain == "ocean":
-        f_pop = region_condition.pop
-        for i in range(years):
-            f_pop = f_pop * 1.0001
-        final_pop = f_pop
-    elif region_condition.region.terrain == "mountain":
-        f_pop = region_condition.pop
-        for i in range(years):
-            f_pop = f_pop * 1.0005
-        final_pop = f_pop
-    elif region_condition.region.terrain == "forest":
-        f_pop = region_condition.pop
-        for i in range(years):
-            f_pop = f_pop * 0.99999
-        final_pop = f_pop
-    elif region_condition.region.terrain == "other":
-        f_pop = region_condition.pop
-        for i in range(years):
-            f_pop = f_pop * 1.00003
-        final_pop = f_pop
-
-    future_region = RegionCondition(
-        region_condition.region, region_condition.year, final_pop, region_condition.emissions)
-
-    return future_region
+# Return the size of the given hash table
+def hash_size(hash_table):
+    return len(hash_table)
 
 
-# put all test cases in the "Tests" class.
-class Tests(unittest.TestCase):
-    def test_area_1(self):
-        result = GlobeRect(30, 31, 24, 25).area()
-        self.assertEqual(result, 12309)
-
-    def test_area_2(self):
-        result = GlobeRect(26, 27.4, -101, 101.5).area()
-        self.assertEqual(result, 100)
-
-    def test_area_3(self):
-        result = GlobeRect("hello", 4, 0.2, 1).area()
-        self.assertEqual(result, "Error")
-
-    def test_densest_1(self):
-        result = densest(
-            [RegionCondition(Region(GlobeRect(55.4, 55.8, 36.3, 36.8), "Moscow", "other"), 2022, 12700000, 230000000),
-             RegionCondition(Region(GlobeRect(41.4, 41.6, 272.7, 273), "Chicago", "other"), 2020, 2740000, 39300000)])
-        self.assertEqual(result, "Moscow")
-
-    def test_densest_2(self):
-        result = densest(
-            [RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000),
-             RegionCondition(Region(GlobeRect(34.4, 35.5, 239.3, 239.6), "Cal Poly", "mountain"), 2017, 20907, 47114)])
-        self.assertEqual(result, "Cal Poly")
-
-    def test_densest_3(self):
-        result = densest(0, 20, "mini")
-        self.assertEqual(result, "Error")
-
-    def test_project_1(self):
-        result = project_condition(
-            RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000), 3)
-        self.assertEqual(result,
-                         RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10704280,
-                                         22800000))
-
-    def test_project_2(self):
-        result = project_condition(
-            RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 10700000, 22800000), 6)
-        self.assertEqual(result,
-                         RegionCondition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), 2020, 11720000,
-                                         22800000))
-
-    def test_project_3(self):
-        result = project_condition(Region(GlobeRect(-5.6, -5, 106.6, 107.1), "Jakarta", "ocean"), -5)
-        self.assertEqual(result, "Error")
+# Return the number of elements in the given hash table
+def hash_count(hash_table):
+    elements = 0
+    for item in hash_table:
+        if item is not None:
+            elements += 1
+        else:
+            elements += 0
+    return elements
 
 
-if (__name__ == '__main__'):
-    unittest.main()
+# Does the hash table contain a mapping for the given word?
+def has_key(hash_table, word):
+    contains(word, hash_table)
+
+
+# What line numbers is the given key mapped to in the given hash table?
+# this list should not contain duplicates, but need not be sorted.
+def lookup(hash_table, word):
+    for item in hash_table:
+        if item is not None:
+            if item == word:
+                return item[1:]
+
+
+# Add a mapping from the given word to the given line number in
+# the given hash table
+def add(hash_table, word: str, line: int) -> None:
+    put(word, hash_table)
+    for item in hash_table:
+        if item == word:
+            item = [item, line]
+
+
+
+# What are the words that have mappings in this hash table?
+# this list should not contain duplicates, but need not be sorted.
+def hash_keys(hash_table):
+    word_list = []
+    for item in hash_table:
+        if item is not None:
+            word_list.append(item)
+
+
+# given a list of stop words and a list of strings representing a text,
+# return a hash table
+def make_concordance(words, lines):
+    hash_table = test_hash(128)
+    for item in range(len(words)):
+        add(hash_table, words[item], lines[item])
+
+    return hash_table
